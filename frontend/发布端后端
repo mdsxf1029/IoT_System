@@ -1,0 +1,124 @@
+# 发布端使用指南
+
+本文档介绍如何在本地运行发布端 `publish.py` 并通过 MQTT 查看数据。
+
+---
+
+## 1. 环境安装
+
+确保 Python 已安装，然后安装依赖：
+
+```bash
+pip install flask paho-mqtt
+````
+
+
+
+## 2. 运行方式
+
+在项目根目录下，使用命令行启动 Flask 服务：
+
+```bash
+python backend/publish.py
+```
+
+默认 Flask 会运行在：
+
+```
+http://127.0.0.1:5000
+```
+
+
+
+## 3. 接口使用
+
+* **启动数据发布**
+
+```bash
+curl -X POST http://127.0.0.1:5000/start
+```
+
+* **查询发布状态**
+
+```bash
+curl http://127.0.0.1:5000/status
+```
+* **停止发布状态**
+
+```bash
+curl -X POST http://127.0.0.1:5000/stop
+
+```
+
+状态示例：
+
+```json
+{
+  "running": true,
+  "count": 123,
+  "total": 8203,
+  "error": null
+}
+```
+
+> 说明：
+>
+> * `running`：是否正在发布
+> * `count`：已发送数据条数
+> * `total`：总数据条数
+> * `error`：错误信息（如果有）
+
+
+
+## 4. MQTT 客户端查看发布内容
+
+推荐使用 **EMQX Dashboard Web 客户端**，步骤如下：
+
+1️⃣ 打开浏览器，进入：
+```
+http://121.43.119.155:18083
+```
+登录后找到左侧 EMQX Dashboard → Tools → WebSocket
+
+
+2️⃣ 填写连接配置：
+
+| 项目          | 值              |
+| ----------- | -------------- |
+| 主机          | 121.43.119.155 |
+| 端口          | 8083           |
+| Path        | /mqtt          |
+| 用户名         | admin          |
+| 密码          | Aaa123456      |
+| 协议          | MQTT 5         |
+| Clean Start | true           |
+
+点击 **Connect**。
+
+3️⃣ 订阅发布的 Topic：
+
+* Topic：`iot/area1/environment`
+* QoS：0
+
+点击 **Subscribe**。
+
+4️⃣ 启动 Flask 发布：
+
+```bash
+curl -X POST http://127.0.0.1:5000/start
+```
+
+5️⃣ 查看 Web 页面上实时刷新的 JSON 数据：
+
+```json
+{
+  "timestamp": "2014-02-13T01:00:00",
+  "temperature": 4.0,
+  "humidity": 65.0,
+  "pressure": 994.0,
+  "temp_unit": "C",
+  "humidity_unit": "RH%",
+  "pressure_unit": "hPa"
+}
+```
+
