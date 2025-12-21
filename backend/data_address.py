@@ -114,12 +114,26 @@ class DataProcessor:
             )
 
         # ----------------------------------------------------
+        # 时间格式处理
+        # ----------------------------------------------------
+        if "timestamp" in plot_df.columns:
+            plot_df["timestamp"] = pd.to_datetime(
+                plot_df["timestamp"],
+                errors="coerce"
+            )
+
+            # 转成更短、更适合图表的格式
+            plot_df["timestamp_fmt"] = plot_df["timestamp"].dt.strftime("%m-%d %H:%M")
+        else:
+            plot_df["timestamp_fmt"] = list(range(len(plot_df)))
+
+        # ----------------------------------------------------
         # 返回统一结构，直接给前端
         # ----------------------------------------------------
         return {
             "stats": stats,
             "data": analysis_result,
-            "labels": plot_df["timestamp"].tolist() if "timestamp" in plot_df.columns else list(range(len(plot_df))),
+            "labels": plot_df["timestamp_fmt"].tolist(),
             "correlation": correlation,
             "available_metrics": available_metrics
         }
