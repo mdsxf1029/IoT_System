@@ -11,20 +11,63 @@
       </select>
     </div>
 
-    <div ref="chartRef" class="chart"></div>
+    <!-- 主体区域：左图右文 -->
+    <div class="content">
+      <!-- 左侧：图表 -->
+      <div class="charts">
+        <div ref="chartRef" class="chart"></div>
+        <div ref="correlationChartRef" class="chart correlation-chart"></div>
+      </div>
+
+      <!-- 右侧：分析解读 -->
+      <div class="analysis-panel">
+        <h3>分析解读</h3>
+
+        <p class="analysis-item" v-if="strongestCorrelation">
+          📈 <strong>趋势特征：</strong><br />
+          当前选中指标 <strong>{{ currentMetric }}</strong>
+          与 <strong>{{ strongestCorrelation.metric }}</strong>
+          表现出最强相关性（相关系数
+          <strong>{{ strongestCorrelation.value.toFixed(2) }}</strong>），
+          表明两者在时间变化上具有明显联动特征。
+        </p>
+
+        <p class="analysis-item" v-else>
+          📈 <strong>趋势特征：</strong><br />
+          当前选中指标 <strong>{{ currentMetric }}</strong>
+          的相关性分析结果尚不足以形成明确结论。
+        </p>
+
+        <p class="analysis-item">
+          🔗 <strong>参数关联：</strong><br />
+          下方相关性热力图展示了温度、湿度与气压等参数之间的相关程度，
+          颜色越深表示相关性越强。
+        </p>
+
+        <p class="analysis-item">
+          🧠 <strong>分析说明：</strong><br />
+          该分析结果可用于理解环境参数之间的相互影响关系，
+          为后续预测分析和异常检测提供依据。
+        </p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from "vue"
+import { ref, onMounted, onBeforeUnmount, computed } from "vue"
 import * as echarts from "echarts"
 import axios from "axios"
 
 const chartRef = ref(null)
+const correlationChartRef = ref(null)  
 const availableMetrics = ref([])
 const currentMetric = ref("temperature")
+
 let chartInstance = null
+let correlationChartInstance = null 
 let analysisData = null
+const correlationData = ref(null)
 let labels = []
 
 const renderChart = () => {
@@ -79,51 +122,116 @@ const renderChart = () => {
   chartInstance.setOption(option, true)
 }
 
-onMounted(async () => {
-  try {
-    const res = await axios.get("http://127.0.0.1:5002/api/analyze")
-    analysisData = res.data.data
-    labels = res.data.labels
-    availableMetrics.value = res.data.available_metrics
-    currentMetric.value = availableMetrics.value[0]
-  } catch (err) {
-    console.warn("无法获取真实数据，使用模拟数据调试前端")
+const renderCorrelationChart = () => {
+  if (!correlationData.value) return
 
-    // ---------------- 模拟数据 ----------------
-    labels = Array.from({ length: 30 }, (_, i) => `T${i+1}`)
-    availableMetrics.value = ["temperature", "humidity", "pressure"]
-    currentMetric.value = "temperature"
+  const metrics = Object.keys(correlationData.value)
+  const heatmapData = []
 
-    analysisData = {
-      temperature: {
-        raw: labels.map(() => 20 + Math.random() * 5),
-        smooth: labels.map(() => 20 + Math.random() * 5),
-        fitted: labels.map(() => 20 + Math.random() * 5),
-      },
-      humidity: {
-        raw: labels.map(() => 50 + Math.random() * 10),
-        smooth: labels.map(() => 50 + Math.random() * 10),
-        fitted: labels.map(() => 50 + Math.random() * 10),
-      },
-      pressure: {
-        raw: labels.map(() => 1010 + Math.random() * 5),
-        smooth: labels.map(() => 1010 + Math.random() * 5),
-        fitted: labels.map(() => 1010 + Math.random() * 5),
+  metrics.forEach((m1, i) => {
+    metrics.forEach((m2, j) => {
+      heatmapData.push([i, j, correlationData.value[m1][m2]])
+    })
+  })
+
+  const option = {
+    title: {
+      text: "参数相关性分析",
+      left: "center",
+      top: 20
+    },
+    tooltip: {
+      formatter: (p) =>
+        `${metrics[p.data[1]]} vs ${metrics[p.data[0]]}<br/>相关系数：${p.data[2].toFixed(2)}`
+    },
+    grid: {
+      top: 80,
+      left: "10%",
+      right: "10%",
+      bottom: "10%"
+    },
+    xAxis: {
+      type: "category",
+      data: metrics
+    },
+    yAxis: {
+      type: "category",
+      data: metrics
+    },
+    visualMap: {
+      min: -1,
+      max: 1,
+      calculable: true,
+      orient: "horizontal",
+      left: "center",
+      bottom: -20,
+      inRange: {
+        color: ["#5470c6", "#ffffff", "#d94e5d"]
       }
-    }
+    },
+    series: [
+      {
+        type: "heatmap",
+        data: heatmapData,
+        label: {
+          show: true,
+          formatter: (p) => p.data[2].toFixed(2)
+        }
+      }
+    ]
   }
+
+  correlationChartInstance.setOption(option, true)
+}
+
+const strongestCorrelation = computed(() => {
+  if (!correlationData.value || !currentMetric.value) return null
+
+  const corrMap = correlationData.value[currentMetric.value]
+  if (!corrMap) return null
+
+  let maxItem = null
+  let maxValue = 0
+
+  Object.entries(corrMap).forEach(([metric, value]) => {
+    // 排除自己和无效值
+    if (metric === currentMetric.value || value == null) return
+
+    const absVal = Math.abs(value)
+    if (absVal > maxValue) {
+      maxValue = absVal
+      maxItem = { metric, value }
+    }
+  })
+
+  return maxItem
+})
+
+onMounted(async () => {
+  const res = await axios.get("http://127.0.0.1:5002/api/analyze")
+
+  analysisData = res.data.data
+  labels = res.data.labels
+  availableMetrics.value = res.data.available_metrics
+  correlationData.value = res.data.correlation
+  currentMetric.value = availableMetrics.value[0]
 
   // 初始化图表
   chartInstance = echarts.init(chartRef.value)
+  correlationChartInstance = echarts.init(correlationChartRef.value)
+
   renderChart()
+  renderCorrelationChart()
 
   // 窗口自适应
-  window.addEventListener("resize", () => chartInstance && chartInstance.resize())
+  window.addEventListener("resize", () => {
+    chartInstance.resize()
+    correlationChartInstance.resize()
+  })
 })
 
-
 onBeforeUnmount(() => {
-  window.removeEventListener("resize", () => chartInstance && chartInstance.resize())
+  window.removeEventListener("resize", () => {})
 })
 </script>
 
@@ -175,9 +283,53 @@ select {
   font-size: 14px;
 }
 
-.chart {
-  width: 100%;
-  height: 600px; /* 大屏效果 */
-  min-height: 500px;
+.chart { 
+  height: 600px; 
+  min-height: 500px; 
+  width: 1000px;
+  min-width: 600px;
+}
+
+.correlation-chart {
+  height: 500px;
+  margin-top: 40px;
+}
+
+/* 主体左右布局 */
+.content {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+/* 左侧图表区域 */
+.charts {
+  flex: 3;
+}
+
+/* 右侧分析解读栏 */
+.analysis-panel {
+  flex: 1;
+  background: linear-gradient(180deg, #f7f9fc, #ffffff);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: inset 0 0 0 1px #e3e8f0;
+}
+
+/* 分析栏标题 */
+.analysis-panel h3 {
+  margin-bottom: 16px;
+  font-size: 20px;
+  color: #334466;
+  border-left: 4px solid #5470c6;
+  padding-left: 12px;
+}
+
+/* 每条分析说明 */
+.analysis-item {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #555;
+  margin-bottom: 18px;
 }
 </style>
