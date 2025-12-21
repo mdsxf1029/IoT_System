@@ -6,7 +6,7 @@ import time
 import asyncio
 from typing import Set
 
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 import websockets
@@ -22,7 +22,7 @@ CSV_PATH = os.path.join(DATA_DIR, "sensor_data.csv")
 CSV_FIELDS = ["timestamp", "temperature", "humidity", "pressure", "raw"]
 
 # ========================
-# MQTT default config
+# MQTT config
 # ========================
 BROKER = "121.43.119.155"
 PORT = 1883
@@ -48,12 +48,12 @@ mqtt_status = {
 # ========================
 # WebSocket state
 # ========================
-ws_loop = None
+ws_loop: asyncio.AbstractEventLoop | None = None
 ws_clients: Set[websockets.WebSocketServerProtocol] = set()
 ws_lock = threading.Lock()
 
 # ========================
-# CSV helper
+# CSV helpers
 # ========================
 def ensure_csv():
     if not os.path.exists(CSV_PATH):
@@ -69,8 +69,48 @@ def append_csv(data: dict):
             "temperature": data.get("temperature"),
             "humidity": data.get("humidity"),
             "pressure": data.get("pressure"),
-            "raw": json.dumps(data)
+            "raw": json.dumps(data, ensure_ascii=False)
         })
+
+# ========================
+# WebSocket logic
+# ========================
+async def ws_handler(websocket):
+    with ws_lock:
+        ws_clients.add(websocket)
+    try:
+        async for _ in websocket:
+            pass
+    finally:
+        with ws_lock:
+            ws_clients.discard(websocket)
+
+async def broadcast_ws(data: dict):
+    message = json.dumps(data, ensure_ascii=False)
+    with ws_lock:
+        clients = list(ws_clients)
+
+    for ws in clients:
+        try:
+            await ws.send(message)
+        except:
+            pass
+
+def start_ws_server():
+    def ws_thread():
+        global ws_loop
+        ws_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(ws_loop)
+
+        async def start_server():
+            await websockets.serve(ws_handler, "0.0.0.0", 8765)
+            print("WebSocket 运行于 ws://127.0.0.1:8765")
+
+        ws_loop.run_until_complete(start_server())
+        ws_loop.run_forever()
+
+    threading.Thread(target=ws_thread, daemon=True).start()
+
 
 # ========================
 # MQTT callbacks
@@ -79,7 +119,7 @@ def on_connect(client, userdata, flags, rc):
     if rc == 0:
         mqtt_status["connected"] = True
         print("MQTT 连接成功")
-        client.subscribe(mqtt_status["topic"])
+        client.subscribe(TOPIC)
     else:
         mqtt_status["error"] = f"rc={rc}"
 
@@ -102,10 +142,12 @@ def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
         append_csv(payload)
+        print("收到 MQTT 数据:", payload)
 
         if ws_loop:
             asyncio.run_coroutine_threadsafe(
-                broadcast_ws(payload), ws_loop
+                broadcast_ws(payload),
+                ws_loop
             )
     except Exception as e:
         print("消息处理失败:", e)
@@ -144,44 +186,6 @@ def disconnect_mqtt():
             mqtt_client = None
 
 # ========================
-# WebSocket server
-# ========================
-async def ws_handler(websocket):
-    with ws_lock:
-        ws_clients.add(websocket)
-    try:
-        async for _ in websocket:
-            pass
-    finally:
-        with ws_lock:
-            ws_clients.remove(websocket)
-
-async def broadcast_ws(data):
-    message = json.dumps(data)
-    with ws_lock:
-        clients = list(ws_clients)
-    for ws in clients:
-        try:
-            await ws.send(message)
-        except:
-            pass
-
-def start_ws():
-    global ws_loop
-    ws_loop = asyncio.new_event_loop()
-
-    async def runner():
-        await websockets.serve(ws_handler, "0.0.0.0", 8765)
-        print("WebSocket 运行于 ws://127.0.0.1:8765")
-        await asyncio.Future()
-
-    def loop():
-        asyncio.set_event_loop(ws_loop)
-        ws_loop.run_until_complete(runner())
-
-    threading.Thread(target=loop, daemon=True).start()
-
-# ========================
 # Flask API
 # ========================
 app = Flask(__name__)
@@ -216,5 +220,6 @@ def api_history():
 # ========================
 if __name__ == "__main__":
     ensure_csv()
-    start_ws()
-    app.run(host="127.0.0.1", port=5001, debug=True)
+    start_ws_server()
+    connect_mqtt()
+    app.run(host="127.0.0.1", port=5001, debug=False, use_reloader=False)
