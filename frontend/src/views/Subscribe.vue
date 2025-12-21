@@ -1,12 +1,39 @@
 <template>
   <div class="card">
-    <h2 class="title">MQTT 订阅端 · 环境数据实时接收</h2>
+    <!-- 项目标题区 -->
+    <div class="header">
+      <h1>IoT_System</h1>
+      <h2>同济大学 2025 年《物联网应用概论》期末项目</h2>
+      <p class="subtitle">
+        某区域温度 / 湿度 / 气压数据发布订阅与分析系统（订阅端）
+      </p>
+    </div>
 
     <!-- 连接状态 -->
     <div class="status">
       <span :class="connected ? 'ok' : 'err'">
-        {{ connected ? "● 已连接订阅端服务" : "● 未连接" }}
+        {{ connected ? "● 已连接订阅端服务（WebSocket）" : "● 未连接订阅端服务" }}
       </span>
+    </div>
+
+    <!-- 实时数据概览 -->
+    <div class="overview">
+      <div class="overview-item">
+        <span class="label">当前温度</span>
+        <span class="value">{{ latest.temperature ?? "--" }} °C</span>
+      </div>
+      <div class="overview-item">
+        <span class="label">当前湿度</span>
+        <span class="value">{{ latest.humidity ?? "--" }} %</span>
+      </div>
+      <div class="overview-item">
+        <span class="label">当前气压</span>
+        <span class="value">{{ latest.pressure ?? "--" }} hPa</span>
+      </div>
+      <div class="overview-item">
+        <span class="label">接收数据条数</span>
+        <span class="value">{{ totalCount }}</span>
+      </div>
     </div>
 
     <!-- 数据表格 -->
@@ -38,9 +65,16 @@ import { ref, onMounted, onBeforeUnmount } from "vue"
 
 const connected = ref(false)
 const dataList = ref([])
+const totalCount = ref(0)
+
+const latest = ref({
+  temperature: null,
+  humidity: null,
+  pressure: null
+})
 
 let ws = null
-const MAX_ROWS = 30   // 页面最多显示 30 条，防止无限增长
+const MAX_ROWS = 30   // 表格最多显示条数
 
 const connectWebSocket = () => {
   ws = new WebSocket("ws://127.0.0.1:8765")
@@ -51,37 +85,30 @@ const connectWebSocket = () => {
   }
 
   ws.onmessage = (event) => {
-    console.log("WS 原始数据:", event.data)
-    console.debug("WS raw message:", event.data)
-
-    let payload
+    let msg
     try {
-      payload = JSON.parse(event.data)
+      msg = JSON.parse(event.data)
     } catch (e) {
-      console.warn("WS 消息非标准 JSON：", e)
-      payload = event.data
+      console.warn("WebSocket 消息解析失败", e)
+      return
     }
 
-    if (typeof payload === "string") {
-      try {
-        payload = JSON.parse(payload)
-      } catch (e) {
-        // keep as string
-      }
-    }
-
-    // 支持后端发送的 { event, data } 包装，也兼容直接发送对象
-    const msg = payload && payload.data ? payload.data : payload
-
-    // 如果 msg 不是对象，跳过
-    if (!msg || typeof msg !== "object") return
-
+    // 更新表格数据
     dataList.value.unshift({
       timestamp: msg.timestamp,
       temperature: msg.temperature,
       humidity: msg.humidity,
       pressure: msg.pressure
     })
+
+    // 更新实时概览
+    latest.value = {
+      temperature: msg.temperature,
+      humidity: msg.humidity,
+      pressure: msg.pressure
+    }
+
+    totalCount.value++
 
     if (dataList.value.length > MAX_ROWS) {
       dataList.value.pop()
@@ -90,7 +117,7 @@ const connectWebSocket = () => {
 
   ws.onclose = () => {
     connected.value = false
-    console.warn("WebSocket 连接关闭")
+    console.warn("WebSocket 已断开")
   }
 
   ws.onerror = () => {
@@ -114,21 +141,35 @@ onBeforeUnmount(() => {
   margin: 20px auto;
   background: #ffffff;
   border-radius: 16px;
-  padding: 20px 30px;
+  padding: 24px 32px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
 }
 
-.title {
-  font-size: 26px;
-  font-weight: 700;
-  color: #334466;
+.header {
   text-align: center;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
+}
+
+.header h1 {
+  font-size: 30px;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.header h2 {
+  font-size: 16px;
+  color: #667799;
+  margin: 6px 0;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #8899aa;
 }
 
 .status {
   text-align: center;
-  margin-bottom: 20px;
+  margin: 16px 0;
   font-size: 14px;
 }
 
@@ -140,8 +181,35 @@ onBeforeUnmount(() => {
   color: #e74c3c;
 }
 
+.overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.overview-item {
+  background: #f6f9ff;
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+
+.label {
+  display: block;
+  font-size: 13px;
+  color: #667799;
+}
+
+.value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #334466;
+  margin-top: 4px;
+}
+
 .table-container {
-  max-height: 500px;
+  max-height: 420px;
   overflow-y: auto;
   border-radius: 8px;
   border: 1px solid #e0e6f0;
