@@ -4,13 +4,14 @@ import time
 import threading
 from flask import Flask, jsonify
 import paho.mqtt.client as mqtt
+from flask_cors import CORS
 stop_event = threading.Event()
 
 # =========================
 # Flask
 # =========================
 app = Flask(__name__)
-
+CORS(app) 
 publish_status = {
     "running": False,
     "count": 0,
