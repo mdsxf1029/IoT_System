@@ -7,11 +7,11 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Deploy to server via SSH
       uses: appleboy/ssh-action@v1.0.0
       with:
@@ -21,104 +21,74 @@ jobs:
         port: 22
         script: |
           set -e  # 遇到错误立即退出
-          
+
           echo "=== 开始部署 ==="
           echo "当前用户: $(whoami)"
           echo "当前目录: $(pwd)"
-          
-          # 创建项目目录（如果不存在）
+
+          # 设置项目目录
           PROJECT_DIR="$HOME/IoT_System"
-          if [ ! -d "$PROJECT_DIR" ]; then
-            echo "项目目录不存在，创建目录..."
+
+          # 如果项目目录不存在，创建并克隆仓库
+          if [ ! -d "$PROJECT_DIR/.git" ]; then
+            echo "首次部署，创建目录并克隆仓库..."
             mkdir -p $PROJECT_DIR
-          fi
-          
-          # 进入项目目录
-          cd $PROJECT_DIR
-          
-          # 如果是首次部署，从GitHub克隆代码
-          if [ ! -d ".git" ]; then
-            echo "首次部署，克隆代码..."
-            git clone https://github.com/${{ github.repository }} .
+            git clone https://github.com/${{ github.repository }} $PROJECT_DIR
           else
             echo "更新现有代码..."
+            cd $PROJECT_DIR
             git fetch origin
             git reset --hard origin/main
           fi
-          
-          echo "=== 检查项目结构 ==="
+
+          cd $PROJECT_DIR
+          echo "=== 当前目录结构 ==="
           ls -la
-          
-          # 检查 backend 目录是否存在
+
+          # 检查 backend 目录
           if [ ! -d "backend" ]; then
             echo "ERROR: backend 目录不存在"
-            ls -la  # 列出所有目录
+            ls -la
             exit 1
           fi
-          
-          echo "backend 目录存在，检查内容..."
-          ls -la backend/
-          
-          # 检查 requirements.txt 是否存在
-          if [ -f "backend/requirements.txt" ]; then
-            echo "requirements.txt 存在"
-          else
-            echo "WARNING: requirements.txt 不存在"
-          fi
-          
-          echo "=== 检查Python和Node.js ==="
-          python3 --version || python --version
-          node --version || echo "Node.js 未安装"
-          npm --version || echo "npm 未安装"
-          
+          echo "backend 目录存在"
+
           # 安装 Python 依赖
-          echo "=== 安装Python依赖 ==="
+          echo "=== 安装 Python 依赖 ==="
           cd backend
           if [ -f "requirements.txt" ]; then
-            echo "安装 requirements.txt 中的依赖..."
             pip3 install -r requirements.txt
           else
-            echo "requirements.txt 不存在，安装基础依赖..."
             pip3 install flask flask-cors paho-mqtt pandas numpy scikit-learn websockets
           fi
-          
-          # 安装前端依赖（如果前端目录存在）
-          cd ..
+
+          # 安装前端依赖
+          cd $PROJECT_DIR
           if [ -d "frontend" ]; then
             echo "=== 安装前端依赖 ==="
             cd frontend
             npm install || echo "前端依赖安装失败，继续部署..."
-            cd ..
           else
-            echo "注意: frontend 目录不存在，跳过前端依赖安装"
+            echo "frontend 目录不存在，跳过前端依赖安装"
           fi
-          
-          # 重启服务
+
+          # 停止旧服务
           echo "=== 停止旧服务 ==="
           pkill -f "python.*publish.py" || true
           pkill -f "python.*subscribe.py" || true
           pkill -f "python.*data_address.py" || true
           pkill -f "python.*app.py" || true
-          sleep 5  # 等待进程完全终止
-          
-          # 启动服务
-          echo "=== 启动新服务 ==="
+          sleep 5
+
+          # 启动新服务
+          echo "=== 启动服务 ==="
           cd $PROJECT_DIR
           nohup python3 backend/subscribe.py > backend/subscribe.log 2>&1 &
-          echo "订阅服务已启动"
-          sleep 2  # 等待服务启动
           nohup python3 backend/publish.py > backend/publish.log 2>&1 &
-          echo "发布服务已启动"
-          sleep 2
           nohup python3 backend/data_address.py > backend/analysis.log 2>&1 &
-          echo "分析服务已启动"
-          sleep 2
           nohup python3 backend/app.py > backend/app.log 2>&1 &
-          echo "通用服务已启动"
-          
+          echo "所有服务已启动"
+
           echo "=== 部署完成 ==="
-          echo "所有服务已成功部署并启动"
-          
-          # 显示运行的服务
-          echo "当前运行的Python服务:"
+          echo "当前运行的 Python 服务:"
           ps aux | grep python | grep -v grep
