@@ -14,10 +14,18 @@ jobs:
     
     - name: Create deployment archive
       run: |
-        tar -czf deploy.tar.gz backend/ frontend/ data/
+        echo "=== 检查本地目录结构 ==="
+        ls -la
+        echo "=== backend 目录内容 ==="
+        ls -la backend/
+        echo "=== 创建压缩包 ==="
+        tar -czvf deploy.tar.gz backend/ frontend/ data/
+        echo "=== 压缩包信息 ==="
         ls -lh deploy.tar.gz
+        echo "=== 验证压缩包内容 ==="
+        tar -tzf deploy.tar.gz | head -20
     
-    - name: Upload and extract on server
+    - name: Upload to server
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.HOST }}
@@ -25,9 +33,9 @@ jobs:
         key: ${{ secrets.SSH_KEY }}
         port: 22
         source: "deploy.tar.gz"
-        target: "~/"
+        target: "/tmp/"
         
-    - name: Extract and install dependencies
+    - name: Extract and deploy
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.HOST }}
@@ -39,34 +47,49 @@ jobs:
           
           echo "=== 开始部署 ==="
           echo "当前用户: $(whoami)"
+          echo "HOME目录: $HOME"
+          
+          # 检查上传的文件
+          echo "=== 检查上传的文件 ==="
+          ls -la /tmp/deploy.tar.gz || (echo "ERROR: 压缩包不存在" && exit 1)
+          
+          # 检查压缩包内容
+          echo "=== 压缩包内容 ==="
+          tar -tzf /tmp/deploy.tar.gz | head -10
+          
+          # 创建项目目录（清理旧目录）
+          echo "=== 准备项目目录 ==="
+          rm -rf $HOME/IoT_System
+          mkdir -p $HOME/IoT_System
           
           # 解压文件
-          cd ~
-          tar -xzf deploy.tar.gz -C ~/IoT_System/ 2>/dev/null || (mkdir -p ~/IoT_System && tar -xzf deploy.tar.gz -C ~/IoT_System/)
-          rm -f deploy.tar.gz
+          echo "=== 解压文件 ==="
+          tar -xzf /tmp/deploy.tar.gz -C $HOME/IoT_System/
+          rm -f /tmp/deploy.tar.gz
+          
+          # 检查解压结果
+          echo "=== 解压后的目录结构 ==="
+          ls -la $HOME/IoT_System/
           
           PROJECT_DIR="$HOME/IoT_System"
           cd $PROJECT_DIR
           
-          echo "=== 当前目录结构 ==="
-          ls -la
-          
           # 检查 backend 目录
           if [ ! -d "backend" ]; then
             echo "ERROR: backend 目录不存在"
+            echo "当前目录内容:"
             ls -la
             exit 1
           fi
           echo "✓ backend 目录存在"
+          ls -la backend/
           
           # 安装 Python 依赖
           echo "=== 安装 Python 依赖 ==="
           cd backend
           if [ -f "requirements.txt" ]; then
-            echo "安装 requirements.txt 中的依赖..."
             pip3 install -r requirements.txt
           else
-            echo "安装基础依赖..."
             pip3 install flask flask-cors paho-mqtt pandas numpy scikit-learn websockets
           fi
           
@@ -95,5 +118,4 @@ jobs:
           nohup python3 backend/app.py > backend/app.log 2>&1 &
           
           echo "=== 部署完成 ==="
-          echo "当前运行的 Python 服务:"
-          ps aux | grep python | grep -v grep || echo "没有找到运行中的服务"
+          ps aux | grep python | grep -v grep || echo "没有运行中的服务"
