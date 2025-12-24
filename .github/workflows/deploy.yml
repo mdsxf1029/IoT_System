@@ -66,6 +66,8 @@ jobs:
             done
             # 清理前端服务器 (端口 5173)
             fuser -k 5173/tcp || true
+            # 清理WebSocket服务 (端口 8080)
+            fuser -k 8080/tcp || true
 
             # 4. 启动后端服务
             echo "=== 启动后端服务 ==="
@@ -86,4 +88,4 @@ jobs:
             sleep 3
             disown -a
             echo "=== 部署完成 ==="
-            netstat -tulpn | grep -E "5000|5173" || echo "未发现端口监听"
+            netstat -tulpn | grep -E "5000|5173|8080" || echo "未发现端口监听"

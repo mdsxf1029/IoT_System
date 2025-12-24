@@ -213,39 +213,7 @@ def disconnect_mqtt():
             mqtt_client = None
 
 
-# 启动WebSocket服务器的函数
-def start_websocket_server_if_main():
-    if __name__ == '__main__':
-        start_ws_server()
-        
-        # 启动一个简单的Flask应用以保持程序运行
-        from flask import Flask
-        from config import Config
-        from flask_cors import CORS
-        
-        app = Flask(__name__)
-        CORS(app, resources={r"/*": {"origins": "*",
-             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
-        
-        app.register_blueprint(subscribe_bp)
-        
-        @app.after_request
-        def add_cors_headers(response):
-            response.headers["Access-Control-Allow-Origin"] = "*"  # 允许所有来源
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            return response
-        
-        @app.route('/status')
-        def status():
-            return {"msg": "Subscribe service with WebSocket running", "ws_port": Config.WEBSOCKET_PORT}
-        
-        app.run(host=Config.SUBSCRIBE_SERVICE_HOST,
-                port=Config.SUBSCRIBE_SERVICE_PORT, debug=True, threaded=True)
 
-# 如果直接运行此脚本，则启动WebSocket服务器
-start_websocket_server_if_main()
 
 
 # ========================
@@ -277,3 +245,22 @@ def api_history():
             for row in reader:
                 data.append(row)
     return jsonify(data[-50:])
+
+
+if __name__ == '__main__':
+    # 启动WebSocket服务器线程
+    start_ws_server()
+    # 自动开启MQTT订阅
+    connect_mqtt()
+
+    print(f"WebSocket服务运行在端口 {Config.WEBSOCKET_PORT}")
+    print("MQTT订阅服务已启动")
+    print("按 Ctrl+C 停止服务")
+    
+    # 保持主线程运行
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n正在停止服务...")
+        disconnect_mqtt()

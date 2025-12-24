@@ -3,8 +3,6 @@ from flask_cors import CORS
 from config import Config
 from publish import publish_bp
 from data_address import data_bp
-from subscribe import subscribe_bp
-
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*",
@@ -12,7 +10,6 @@ CORS(app, resources={r"/*": {"origins": "*",
 
 app.register_blueprint(publish_bp)
 app.register_blueprint(data_bp)
-app.register_blueprint(subscribe_bp)
 
 
 @app.after_request
