@@ -22,8 +22,8 @@ jobs:
 
     - name: Create deployment archive
       run: |
-        # 此时 dist 已经存在了，我们把它一起打进去
-        tar -czvf deploy.tar.gz backend/ frontend/dist/ data/
+        # 打包后端、前端构建产物和数据目录，包含 SPA 服务器脚本
+        tar -czvf deploy.tar.gz backend/ frontend/dist/ frontend/spa_server.py data/
 
     - name: Upload to server
       uses: appleboy/scp-action@v0.1.7
@@ -75,12 +75,12 @@ jobs:
             nohup python3 -u data_address.py > analysis.log 2>&1 &
             nohup python3 -u app.py > app.log 2>&1 &
             
-            # 5. 启动前端服务 (直接启动 5173 端口)
+            # 5. 启动前端服务 (支持 SPA 路由的 5173 端口)
             echo "=== 启动前端服务 (Port: 5173) ==="
             if [ -d "$PROJECT_DIR/frontend/dist" ]; then
-                cd $PROJECT_DIR/frontend/dist
-                # 使用 Python 快速拉起 5173 端口提供静态页面
-                nohup python3 -m http.server 5173 > ../frontend.log 2>&1 &
+                cd $PROJECT_DIR/frontend
+                # 使用支持 SPA 路由的服务器
+                nohup python3 spa_server.py > frontend.log 2>&1 &
             else
                 echo "ERROR: dist 目录不存在，请检查构建步骤"
             fi
