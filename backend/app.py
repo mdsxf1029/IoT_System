@@ -15,4 +15,4 @@ def ping():
 
 if __name__ == '__main__':
     app.run(host=Config.ANALYSIS_SERVICE_HOST,
-            port=Config.ANALYSIS_SERVICE_PORT, debug=True)
+            port=Config.ANALYSIS_SERVICE_PORT, debug=True, threaded=True)

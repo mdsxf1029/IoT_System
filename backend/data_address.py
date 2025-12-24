@@ -157,10 +157,14 @@ processor = DataProcessor(CSV_PATH)
 
 @app.route("/api/analyze", methods=["GET"])
 def analyze_data():
-    result = processor.process()
-    return jsonify(result)
+    try:
+        result = processor.process()
+        return jsonify(result)
+    except Exception as e:
+        print(f"分析服务错误: {str(e)}")
+        return jsonify({"error": f"分析服务错误: {str(e)}"}), 500
 
 
 if __name__ == "__main__":
     app.run(host=Config.ANALYSIS_SERVICE_HOST,
-            port=Config.ANALYSIS_SERVICE_PORT, debug=True)
+            port=Config.ANALYSIS_SERVICE_PORT, debug=True, threaded=True)

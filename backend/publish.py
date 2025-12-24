@@ -183,4 +183,4 @@ def stop():
 # =========================
 if __name__ == "__main__":
     app.run(host=Config.PUBLISH_SERVICE_HOST,
-            port=Config.PUBLISH_SERVICE_PORT, debug=True)
+            port=Config.PUBLISH_SERVICE_PORT, debug=True, threaded=True)
