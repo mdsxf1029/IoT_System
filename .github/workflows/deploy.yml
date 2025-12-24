@@ -68,36 +68,40 @@ jobs:
             # 3. 安装依赖
             echo "=== 检查并安装 Python 依赖 ==="
             cd $PROJECT_DIR/backend
-            # 使用 --no-cache-dir 减少磁盘占用，|| true 防止因权限警告导致中断
-            pip3 install --user -r requirements.txt || pip3 install --user flask flask-cors paho-mqtt pandas numpy scikit-learn websockets || true
+            pip3 install --user -r requirements.txt || true
 
-            # 4. 停止旧服务 (重点优化：不再因为进程不存在而报错)
+            # 4. 停止旧服务 (使用 [ ] 技巧防止进程自杀)
             echo "=== 停止旧服务 ==="
-            # 使用 pkill -f 匹配命令行，并使用 || true 忽略“进程不存在”的错误
-            pkill -f "python3.*subscribe.py" || true
-            pkill -f "python3.*publish.py" || true
-            pkill -f "python3.*data_address.py" || true
-            pkill -f "python3.*app.py" || true
+            # [s]ubscribe 会匹配 "subscribe"，但 pkill 自己的命令行里是 "[s]ubscribe"，不匹配正则
+            pkill -f "python3.*[s]ubscribe.py" || true
+            pkill -f "python3.*[p]ublish.py" || true
+            pkill -f "python3.*[d]ata_address.py" || true
+            pkill -f "python3.*[a]pp.py" || true
             sleep 2
 
-            # 5. 启动新服务 (重点优化：使用 disown 确保进程在后台稳固运行)
+            # 5. 启动新服务
             echo "=== 启动服务 ==="
-            # 确保在 backend 目录下启动，或者使用绝对路径
             cd $PROJECT_DIR/backend
 
+            # 依次启动并记录 PID 
             nohup python3 subscribe.py > subscribe.log 2>&1 &
-            disown
+            echo $! > subscribe.pid
             nohup python3 publish.py > publish.log 2>&1 &
-            disown
+            echo $! > publish.pid
             nohup python3 data_address.py > analysis.log 2>&1 &
-            disown
+            echo $! > analysis.pid
             nohup python3 app.py > app.log 2>&1 &
-            disown
+            echo $! > app.pid
+
+            disown -a
 
             echo "=== 部署完成，检查运行状态 ==="
-            sleep 3
+            sleep 5
             ps aux | grep python3 | grep -E "subscribe|publish|data_address|app" || echo "警告：未发现运行中的服务"
 
-            # 打印最后几行日志看看有没有启动报错
-            echo "=== 最近日志摘要 ==="
-            tail -n 5 *.log || true
+            # 检查日志是否有立即报错
+            echo "=== 启动日志自检 ==="
+            for log in *.log; do
+                echo "--- $log 尾部内容 ---"
+                tail -n 5 "$log"
+            done
