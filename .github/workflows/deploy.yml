@@ -60,9 +60,22 @@ jobs:
             rm -f /tmp/deploy.tar.gz
 
             # 2. 安装依赖
-            echo "=== 安装依赖 ==="
+            echo "=== 安装后端依赖 ==="
             cd $PROJECT_DIR/backend
             pip3 install --user -r requirements.txt || true
+            
+            # 安装前端依赖并构建（如果 npm 存在）
+            cd $PROJECT_DIR
+            if [ -d "frontend" ]; then
+              if command -v npm &> /dev/null; then
+                echo "=== 安装前端依赖并构建 ==="
+                cd frontend
+                npm install || echo "前端依赖安装失败，继续部署..."
+                npm run build || echo "前端构建失败，继续部署..."
+              else
+                echo "npm 未安装，跳过前端构建"
+              fi
+            fi
 
             # 3. 精确清理旧进程 (不再使用危险的 pkill)
             echo "=== 停止旧服务 ==="
@@ -90,9 +103,23 @@ jobs:
             nohup python3 -u publish.py > publish.log 2>&1 &
             nohup python3 -u data_address.py > analysis.log 2>&1 &
             nohup python3 -u app.py > app.log 2>&1 &
-
+                        
+            # 启动前端服务（使用 Python HTTP 服务器提供静态文件）
+            cd $PROJECT_DIR
+            if [ -d "frontend/dist" ]; then
+              echo "=== 启动前端 HTTP 服务器 ==="
+              cd frontend/dist
+              nohup python3 -m http.server 8080 > frontend_server.log 2>&1 &
+            elif command -v npm &> /dev/null && [ -d "frontend" ]; then
+              echo "=== 启动前端开发服务器 ==="
+              cd frontend
+              nohup npm run dev -- --host 0.0.0.0 --port 5173 > frontend.log 2>&1 &
+            else
+              echo "前端未构建，跳过前端服务启动"
+            fi
+                        
             # 关键：稍微等待并确保进程已经脱离当前 shell
-            sleep 2
+            sleep 3
             disown -a
 
             echo "=== 部署完成，当前运行状态 ==="
