@@ -28,21 +28,38 @@ jobs:
         username: ${{ secrets.USERNAME }}
         key: ${{ secrets.SSH_KEY }}
         script: |
-          cd ~/IoT_System
-          git pull origin main
+          # 检查项目目录是否存在
+          if [ ! -d "$HOME/IoT_System" ]; then
+            echo "项目目录不存在，创建目录并克隆代码..."
+            mkdir -p $HOME/IoT_System
+            cd $HOME/IoT_System
+            git clone https://github.com/${{ github.repository }} .
+          else
+            echo "项目目录已存在，更新代码..."
+            cd $HOME/IoT_System
+            git fetch origin
+            git reset --hard origin/main
+          fi
+          
+          # 安装 Python 依赖
           cd backend
-          pip install -r requirements.txt
+          pip install -r requirements.txt || pip install flask flask-cors paho-mqtt pandas numpy scikit-learn websockets
+          
+          # 安装前端依赖
           cd ../frontend
-          npm install
+          npm install || echo "前端依赖安装失败，继续部署..."
+          
           cd ..
           # 重启服务
           pkill -f "python.*publish.py" || true
           pkill -f "python.*subscribe.py" || true
           pkill -f "python.*data_address.py" || true
           pkill -f "python.*app.py" || true
+          sleep 2  # 等待进程完全终止
+          
           # 启动服务
-          nohup python backend/subscribe.py > subscribe.log 2>&1 &
-          nohup python backend/publish.py > publish.log 2>&1 &
-          nohup python backend/data_address.py > analysis.log 2>&1 &
-          nohup python backend/app.py > app.log 2>&1 &
+          nohup python backend/subscribe.py > $HOME/IoT_System/backend/subscribe.log 2>&1 &
+          nohup python backend/publish.py > $HOME/IoT_System/backend/publish.log 2>&1 &
+          nohup python backend/data_address.py > $HOME/IoT_System/backend/analysis.log 2>&1 &
+          nohup python backend/app.py > $HOME/IoT_System/backend/app.log 2>&1 &
           echo "Services deployed successfully!"
