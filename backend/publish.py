@@ -2,19 +2,17 @@ import os
 import json
 import time
 import threading
-from flask import Flask, jsonify
+from flask import Flask, jsonify, Blueprint
 import paho.mqtt.client as mqtt
 from flask_cors import CORS
 from config import Config
 stop_event = threading.Event()
 
+publish_bp = Blueprint('publish', __name__)
+
 # =========================
 # Flask
 # =========================
-app = Flask(__name__)
-# 配置CORS以允许跨域请求
-CORS(app, resources={r"/*": {"origins": "*",
-     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
 publish_status = {
     "running": False,
     "count": 0,
@@ -151,7 +149,7 @@ def publish_data():
 # =========================
 # Flask 接口
 # =========================
-@app.route("/start", methods=["POST"])
+@publish_bp.route("/start", methods=["POST"])
 def start():
     global publish_thread
 
@@ -164,23 +162,15 @@ def start():
     return jsonify({"msg": "started"})
 
 
-@app.route("/status", methods=["GET"])
+@publish_bp.route("/status", methods=["GET"])
 def status():
     return jsonify(publish_status)
 
 
-@app.route("/stop", methods=["POST"])
+@publish_bp.route("/stop", methods=["POST"])
 def stop():
     if not publish_status["running"]:
         return jsonify({"msg": "not running"}), 400
 
     stop_event.set()
     return jsonify({"msg": "stopped"})
-
-
-# =========================
-# 启动 Flask
-# =========================
-if __name__ == "__main__":
-    app.run(host=Config.PUBLISH_SERVICE_HOST,
-            port=Config.PUBLISH_SERVICE_PORT, debug=True, threaded=True)

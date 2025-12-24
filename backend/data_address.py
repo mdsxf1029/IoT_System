@@ -2,9 +2,11 @@ import pandas as pd
 import numpy as np
 import os
 from sklearn.linear_model import LinearRegression
-from flask import Flask, jsonify
+from flask import Flask, jsonify, Blueprint
 from flask_cors import CORS
 from config import Config
+
+data_bp = Blueprint('data', __name__)
 
 
 class DataProcessor:
@@ -142,11 +144,6 @@ class DataProcessor:
         }
 
 
-app = Flask(__name__)
-# 配置CORS以允许跨域请求
-CORS(app, resources={r"/*": {"origins": "*",
-     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
-
 BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.normpath(os.path.join(BASE_DIR, "..", "data"))
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -155,7 +152,7 @@ CSV_PATH = os.path.join(DATA_DIR, "sensor_data.csv")
 processor = DataProcessor(CSV_PATH)
 
 
-@app.route("/api/analyze", methods=["GET"])
+@data_bp.route("/api/analyze", methods=["GET"])
 def analyze_data():
     try:
         result = processor.process()
@@ -163,8 +160,3 @@ def analyze_data():
     except Exception as e:
         print(f"分析服务错误: {str(e)}")
         return jsonify({"error": f"分析服务错误: {str(e)}"}), 500
-
-
-if __name__ == "__main__":
-    app.run(host=Config.ANALYSIS_SERVICE_HOST,
-            port=Config.ANALYSIS_SERVICE_PORT, debug=True, threaded=True)

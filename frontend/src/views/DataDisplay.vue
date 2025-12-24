@@ -208,7 +208,7 @@ const strongestCorrelation = computed(() => {
 })
 
 onMounted(async () => {
-  const res = await axios.get("http://121.43.119.155:5002/api/analyze")
+  const res = await axios.get("http://121.43.119.155:5000/api/analyze")
 
   analysisData = res.data.data
   labels = res.data.labels

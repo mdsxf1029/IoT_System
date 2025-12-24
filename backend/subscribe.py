@@ -6,11 +6,13 @@ import time
 import asyncio
 from typing import Set
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, Blueprint
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 import websockets
 from config import Config
+
+subscribe_bp = Blueprint('subscribe', __name__)
 
 # ========================
 # Path config
@@ -112,9 +114,19 @@ def start_ws_server():
 
         async def start_server():
             # 使用 0.0.0.0 以允许外部连接
-            await websockets.serve(ws_handler, "0.0.0.0", Config.WEBSOCKET_PORT)
-            print(
-                f"WebSocket 运行于 ws://{Config.WEBSOCKET_HOST}:{Config.WEBSOCKET_PORT}")
+            try:
+                server = await websockets.serve(ws_handler, "0.0.0.0", Config.WEBSOCKET_PORT)
+                print(
+                    f"WebSocket 运行于 ws://{Config.WEBSOCKET_HOST}:{Config.WEBSOCKET_PORT}")
+                await server.wait_closed()
+            except OSError as e:
+                if e.errno == 10048:  # 端口已被使用
+                    print(f"端口 {Config.WEBSOCKET_PORT} 已被占用，无法启动WebSocket服务器")
+                    import asyncio
+                    await asyncio.sleep(5)  # 等待5秒后退出
+                    return  # 不再重试，避免无限递归
+                else:
+                    print(f"WebSocket服务器启动失败: {e}")
 
         ws_loop.run_until_complete(start_server())
         ws_loop.run_forever()
@@ -201,33 +213,62 @@ def disconnect_mqtt():
             mqtt_client = None
 
 
+# 启动WebSocket服务器的函数
+def start_websocket_server_if_main():
+    if __name__ == '__main__':
+        start_ws_server()
+        
+        # 启动一个简单的Flask应用以保持程序运行
+        from flask import Flask
+        from config import Config
+        from flask_cors import CORS
+        
+        app = Flask(__name__)
+        CORS(app, resources={r"/*": {"origins": "*",
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
+        
+        app.register_blueprint(subscribe_bp)
+        
+        @app.after_request
+        def add_cors_headers(response):
+            response.headers["Access-Control-Allow-Origin"] = "*"  # 允许所有来源
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            return response
+        
+        @app.route('/status')
+        def status():
+            return {"msg": "Subscribe service with WebSocket running", "ws_port": Config.WEBSOCKET_PORT}
+        
+        app.run(host=Config.SUBSCRIBE_SERVICE_HOST,
+                port=Config.SUBSCRIBE_SERVICE_PORT, debug=True, threaded=True)
+
+# 如果直接运行此脚本，则启动WebSocket服务器
+start_websocket_server_if_main()
+
+
 # ========================
 # Flask API
 # ========================
-app = Flask(__name__)
-# 配置CORS以允许跨域请求
-CORS(app, resources={r"/*": {"origins": "*",
-     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
-
-
-@app.route("/api/connect", methods=["POST"])
+@subscribe_bp.route("/api/connect", methods=["POST"])
 def api_connect():
     connect_mqtt()
     return jsonify({"msg": "connected", "status": mqtt_status})
 
 
-@app.route("/api/disconnect", methods=["POST"])
+@subscribe_bp.route("/api/disconnect", methods=["POST"])
 def api_disconnect():
     disconnect_mqtt()
     return jsonify({"msg": "disconnected"})
 
 
-@app.route("/api/status", methods=["GET"])
+@subscribe_bp.route("/api/status", methods=["GET"])
 def api_status():
     return jsonify(mqtt_status)
 
 
-@app.route("/api/history", methods=["GET"])
+@subscribe_bp.route("/api/history", methods=["GET"])
 def api_history():
     data = []
     if os.path.exists(CSV_PATH):
@@ -236,14 +277,3 @@ def api_history():
             for row in reader:
                 data.append(row)
     return jsonify(data[-50:])
-
-
-# ========================
-# Main
-# ========================
-if __name__ == "__main__":
-    ensure_csv()
-    start_ws_server()
-    connect_mqtt()
-    app.run(host=Config.SUBSCRIBE_SERVICE_HOST,
-            port=Config.SUBSCRIBE_SERVICE_PORT, debug=False, use_reloader=False, threaded=True)

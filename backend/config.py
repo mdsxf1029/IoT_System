@@ -14,14 +14,6 @@ class Config:
     PUBLISH_SERVICE_HOST = os.environ.get('PUBLISH_SERVICE_HOST', '0.0.0.0')
     PUBLISH_SERVICE_PORT = int(os.environ.get('PUBLISH_SERVICE_PORT', 5000))
 
-    SUBSCRIBE_SERVICE_HOST = os.environ.get(
-        'SUBSCRIBE_SERVICE_HOST', '0.0.0.0')
-    SUBSCRIBE_SERVICE_PORT = int(
-        os.environ.get('SUBSCRIBE_SERVICE_PORT', 8080))
-
-    ANALYSIS_SERVICE_HOST = os.environ.get('ANALYSIS_SERVICE_HOST', '0.0.0.0')
-    ANALYSIS_SERVICE_PORT = int(os.environ.get('ANALYSIS_SERVICE_PORT', 8080))
-
     # WebSocket 配置
     WEBSOCKET_HOST = os.environ.get('WEBSOCKET_HOST', '0.0.0.0')
     WEBSOCKET_PORT = int(os.environ.get('WEBSOCKET_PORT', 8080))
