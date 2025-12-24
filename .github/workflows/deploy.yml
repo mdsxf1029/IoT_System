@@ -9,57 +9,93 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Install dependencies
-      run: |
-        pip install -r backend/requirements.txt
-    
     - name: Deploy to server via SSH
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.HOST }}
         username: ${{ secrets.USERNAME }}
         key: ${{ secrets.SSH_KEY }}
+        port: 22
         script: |
+          set -e  # 遇到错误立即退出
+          
+          echo "=== 开始部署 ==="
+          echo "当前用户: $(whoami)"
+          echo "当前目录: $(pwd)"
+          
           # 检查项目目录是否存在
           if [ ! -d "$HOME/IoT_System" ]; then
             echo "项目目录不存在，创建目录并克隆代码..."
             mkdir -p $HOME/IoT_System
             cd $HOME/IoT_System
-            git clone https://github.com/${{ github.repository }} .
+            git clone https://github.com/${{ github.repository }} . --depth 1
           else
             echo "项目目录已存在，更新代码..."
             cd $HOME/IoT_System
             git fetch origin
             git reset --hard origin/main
+            git pull origin main  # 确保代码是最新的
           fi
           
+          echo "=== 检查项目结构 ==="
+          ls -la
+          if [ -d "$HOME/IoT_System/backend" ]; then
+            echo "backend 目录存在"
+            ls -la backend/
+          else
+            echo "ERROR: backend 目录不存在"
+            exit 1
+          fi
+          
+          echo "=== 检查Python和Node.js ==="
+          python3 --version || python --version
+          node --version
+          npm --version
+          
           # 安装 Python 依赖
-          cd backend
-          pip install -r requirements.txt || pip install flask flask-cors paho-mqtt pandas numpy scikit-learn websockets
+          echo "=== 安装Python依赖 ==="
+          if [ -d "$HOME/IoT_System/backend" ]; then
+            cd $HOME/IoT_System/backend
+            if [ -f "requirements.txt" ]; then
+              echo "找到 requirements.txt，开始安装..."
+              pip3 install -r requirements.txt || pip install -r requirements.txt
+            else
+              echo "requirements.txt 不存在，安装基础依赖..."
+              pip3 install flask flask-cors paho-mqtt pandas numpy scikit-learn websockets
+            fi
+          else
+            echo "ERROR: backend 目录不存在"
+            exit 1
+          fi
           
           # 安装前端依赖
-          cd ../frontend
-          npm install || echo "前端依赖安装失败，继续部署..."
+          echo "=== 安装前端依赖 ==="
+          if [ -d "$HOME/IoT_System/frontend" ]; then
+            cd $HOME/IoT_System/frontend
+            npm install || echo "前端依赖安装失败，继续部署..."
+          else
+            echo "注意: frontend 目录不存在"
+          fi
           
-          cd ..
           # 重启服务
+          echo "=== 停止旧服务 ==="
           pkill -f "python.*publish.py" || true
           pkill -f "python.*subscribe.py" || true
           pkill -f "python.*data_address.py" || true
           pkill -f "python.*app.py" || true
-          sleep 2  # 等待进程完全终止
+          sleep 3  # 等待进程完全终止
           
           # 启动服务
-          nohup python backend/subscribe.py > $HOME/IoT_System/backend/subscribe.log 2>&1 &
-          nohup python backend/publish.py > $HOME/IoT_System/backend/publish.log 2>&1 &
-          nohup python backend/data_address.py > $HOME/IoT_System/backend/analysis.log 2>&1 &
-          nohup python backend/app.py > $HOME/IoT_System/backend/app.log 2>&1 &
-          echo "Services deployed successfully!"
+          echo "=== 启动新服务 ==="
+          cd $HOME/IoT_System
+          nohup python3 backend/subscribe.py > backend/subscribe.log 2>&1 &
+          echo "订阅服务已启动"
+          nohup python3 backend/publish.py > backend/publish.log 2>&1 &
+          echo "发布服务已启动"
+          nohup python3 backend/data_address.py > backend/analysis.log 2>&1 &
+          echo "分析服务已启动"
+          nohup python3 backend/app.py > backend/app.log 2>&1 &
+          echo "通用服务已启动"
+          
+          echo "=== 部署完成 ==="
+          echo "所有服务已成功部署并启动"
