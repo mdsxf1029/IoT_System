@@ -107,13 +107,20 @@ jobs:
             fi
           fi
           
-          # 停止旧服务
+          # 停止旧服务（使用更安全的方式）
           echo "=== 停止旧服务 ==="
-          pkill -f "python.*publish.py" || true
-          pkill -f "python.*subscribe.py" || true
-          pkill -f "python.*data_address.py" || true
-          pkill -f "python.*app.py" || true
-          sleep 3
+          cd $PROJECT_DIR
+          
+          # 使用 PID 文件或直接查找进程
+          for script in publish.py subscribe.py data_address.py app.py; do
+            pid=$(pgrep -f "python3.*$script" 2>/dev/null || true)
+            if [ -n "$pid" ]; then
+              echo "停止 $script (PID: $pid)"
+              kill $pid 2>/dev/null || true
+            fi
+          done
+          
+          sleep 2
           
           # 启动新服务
           echo "=== 启动服务 ==="
