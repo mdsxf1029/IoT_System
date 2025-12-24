@@ -12,19 +12,22 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    - name: Deploy files to server
+    - name: Create deployment archive
+      run: |
+        tar -czf deploy.tar.gz backend/ frontend/ data/
+        ls -lh deploy.tar.gz
+    
+    - name: Upload and extract on server
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.HOST }}
         username: ${{ secrets.USERNAME }}
         key: ${{ secrets.SSH_KEY }}
         port: 22
-        source: "."
-        target: "~/IoT_System"
-        rm: false
-        overwrite: true
+        source: "deploy.tar.gz"
+        target: "~/"
         
-    - name: Install dependencies and restart services
+    - name: Extract and install dependencies
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.HOST }}
@@ -36,6 +39,11 @@ jobs:
           
           echo "=== 开始部署 ==="
           echo "当前用户: $(whoami)"
+          
+          # 解压文件
+          cd ~
+          tar -xzf deploy.tar.gz -C ~/IoT_System/ 2>/dev/null || (mkdir -p ~/IoT_System && tar -xzf deploy.tar.gz -C ~/IoT_System/)
+          rm -f deploy.tar.gz
           
           PROJECT_DIR="$HOME/IoT_System"
           cd $PROJECT_DIR
