@@ -5,6 +5,7 @@ import threading
 from flask import Flask, jsonify
 import paho.mqtt.client as mqtt
 from flask_cors import CORS
+from config import Config
 stop_event = threading.Event()
 
 # =========================
@@ -89,11 +90,11 @@ def publish_data():
         print("可发布数据条数:", len(timestamps))
 
         # MQTT 参数
-        BROKER_IP = "121.43.119.155"
-        PORT = 1883
-        USERNAME = "admin"
-        PASSWORD = "Aaa123456"
-        TOPIC = "iot/area1/environment"
+        BROKER_IP = Config.MQTT_BROKER
+        PORT = Config.MQTT_PORT
+        USERNAME = Config.MQTT_USERNAME
+        PASSWORD = Config.MQTT_PASSWORD
+        TOPIC = Config.MQTT_TOPIC
 
         client = mqtt.Client()
         client.username_pw_set(USERNAME, PASSWORD)
@@ -178,4 +179,4 @@ def stop():
 # 启动 Flask
 # =========================
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host=Config.PUBLISH_SERVICE_HOST, port=Config.PUBLISH_SERVICE_PORT, debug=True)

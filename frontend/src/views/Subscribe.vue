@@ -77,7 +77,7 @@ let ws = null
 const MAX_ROWS = 30   // 表格最多显示条数
 
 const connectWebSocket = () => {
-  ws = new WebSocket("ws://127.0.0.1:8765")
+  ws = new WebSocket("ws://121.43.119.155:8765")
 
   ws.onopen = () => {
     connected.value = true

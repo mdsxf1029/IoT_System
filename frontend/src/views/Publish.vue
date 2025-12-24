@@ -61,7 +61,7 @@ export default {
   methods: {
     async startPublish() {
       try {
-        await axios.post("http://127.0.0.1:5000/start")
+        await axios.post("http://121.43.119.155:5000/start")
         this.status.running = true
         this.stopping = false
         this.startPolling()
@@ -81,7 +81,7 @@ export default {
 
       // ② 通知后端（慢也不影响前端）
       try {
-        await axios.post("http://127.0.0.1:5000/stop")
+        await axios.post("http://121.43.119.155:5000/stop")
       } catch (err) {
         // 后端 400 / 已停止，都视为成功
         console.warn("stop 返回异常，已按停止状态处理")
@@ -92,7 +92,7 @@ export default {
 
     async fetchStatus(showText = false) {
       try {
-        const res = await axios.get("http://127.0.0.1:5000/status")
+        const res = await axios.get("http://121.43.119.155:5000/status")
 
         // ⛔ 停止过程中，不允许后端状态覆盖前端
         if (!this.stopping) {

@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "5000:5000"  # 发布端API
+      - "5001:5001"  # 订阅端API
+      - "5002:5002"  # 数据分析API
+      - "8080:3000"  # 通用后端API
+      - "8765:8765"  # WebSocket
+    environment:
+      - MQTT_BROKER=121.43.119.155
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=admin
+      - MQTT_PASSWORD=Aaa123456
+      - MQTT_TOPIC=iot/area1/environment
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - mqtt
+    networks:
+      - iot-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    depends_on:
+      - backend
+    networks:
+      - iot-network
+
+  mqtt:
+    image: emqx/emqx:latest
+    ports:
+      - "1883:1883"
+      - "18083:18083"
+    environment:
+      - EMQX_LOADED_PLUGINS=emqx_dashboard,emqx_auth_username
+      - EMQX_DASHBOARD_DEFAULT_USER=admin
+      - EMQX_DASHBOARD_DEFAULT_PASSWORD=Aaa123456
+    volumes:
+      - emqx_data:/opt/emqx/data
+    networks:
+      - iot-network
+
+volumes:
+  emqx_data:
+
+networks:
+  iot-network:
+    driver: bridge

@@ -4,6 +4,7 @@ import os
 from sklearn.linear_model import LinearRegression
 from flask import Flask, jsonify
 from flask_cors import CORS
+from config import Config
 
 class DataProcessor:
     def __init__(self, csv_path):
@@ -154,4 +155,4 @@ def analyze_data():
     return jsonify(result)
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5002, debug=True)
+    app.run(host=Config.ANALYSIS_SERVICE_HOST, port=Config.ANALYSIS_SERVICE_PORT, debug=True)

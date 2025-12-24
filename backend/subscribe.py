@@ -10,6 +10,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 import paho.mqtt.client as mqtt
 import websockets
+from config import Config
 
 # ========================
 # Path config
@@ -24,11 +25,11 @@ CSV_FIELDS = ["timestamp", "temperature", "humidity", "pressure", "raw"]
 # ========================
 # MQTT config
 # ========================
-BROKER = "121.43.119.155"
-PORT = 1883
-TOPIC = "iot/area1/environment"
-USERNAME = "admin"
-PASSWORD = "Aaa123456"
+BROKER = Config.MQTT_BROKER
+PORT = Config.MQTT_PORT
+TOPIC = Config.MQTT_TOPIC
+USERNAME = Config.MQTT_USERNAME
+PASSWORD = Config.MQTT_PASSWORD
 
 # ========================
 # Runtime state
@@ -103,8 +104,8 @@ def start_ws_server():
         asyncio.set_event_loop(ws_loop)
 
         async def start_server():
-            await websockets.serve(ws_handler, "0.0.0.0", 8765)
-            print("WebSocket 运行于 ws://127.0.0.1:8765")
+            await websockets.serve(ws_handler, Config.WEBSOCKET_HOST, Config.WEBSOCKET_PORT)
+            print(f"WebSocket 运行于 ws://{Config.WEBSOCKET_HOST}:{Config.WEBSOCKET_PORT}")
 
         ws_loop.run_until_complete(start_server())
         ws_loop.run_forever()
@@ -222,4 +223,4 @@ if __name__ == "__main__":
     ensure_csv()
     start_ws_server()
     connect_mqtt()
-    app.run(host="127.0.0.1", port=5001, debug=False, use_reloader=False)
+    app.run(host=Config.SUBSCRIBE_SERVICE_HOST, port=Config.SUBSCRIBE_SERVICE_PORT, debug=False, use_reloader=False)

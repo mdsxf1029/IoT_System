@@ -1,0 +1,48 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r backend/requirements.txt
+    
+    - name: Deploy to server via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          cd ~/IoT_System
+          git pull origin main
+          cd backend
+          pip install -r requirements.txt
+          cd ../frontend
+          npm install
+          cd ..
+          # 重启服务
+          pkill -f "python.*publish.py" || true
+          pkill -f "python.*subscribe.py" || true
+          pkill -f "python.*data_address.py" || true
+          pkill -f "python.*app.py" || true
+          # 启动服务
+          nohup python backend/subscribe.py > subscribe.log 2>&1 &
+          nohup python backend/publish.py > publish.log 2>&1 &
+          nohup python backend/data_address.py > analysis.log 2>&1 &
+          nohup python backend/app.py > app.log 2>&1 &
+          echo "Services deployed successfully!"
