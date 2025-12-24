@@ -12,7 +12,9 @@ stop_event = threading.Event()
 # Flask
 # =========================
 app = Flask(__name__)
-CORS(app) 
+# 配置CORS以允许跨域请求
+CORS(app, resources={r"/*": {"origins": "*",
+     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
 publish_status = {
     "running": False,
     "count": 0,
@@ -73,9 +75,9 @@ def publish_data():
         DATA_DIR = os.path.join(os.path.dirname(__file__), "../data")
 
         temperature = load_txt_data(os.path.join(DATA_DIR, "temperature.txt"))
-        humidity    = load_txt_data(os.path.join(DATA_DIR, "humidity.txt"))
-        pressure    = load_txt_data(os.path.join(DATA_DIR, "pressure.txt"))
-        
+        humidity = load_txt_data(os.path.join(DATA_DIR, "humidity.txt"))
+        pressure = load_txt_data(os.path.join(DATA_DIR, "pressure.txt"))
+
         timestamps = sorted(
             set(temperature.keys()) &
             set(humidity.keys()) &
@@ -166,6 +168,7 @@ def start():
 def status():
     return jsonify(publish_status)
 
+
 @app.route("/stop", methods=["POST"])
 def stop():
     if not publish_status["running"]:
@@ -179,4 +182,5 @@ def stop():
 # 启动 Flask
 # =========================
 if __name__ == "__main__":
-    app.run(host=Config.PUBLISH_SERVICE_HOST, port=Config.PUBLISH_SERVICE_PORT, debug=True)
+    app.run(host=Config.PUBLISH_SERVICE_HOST,
+            port=Config.PUBLISH_SERVICE_PORT, debug=True)

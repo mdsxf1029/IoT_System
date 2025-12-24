@@ -56,11 +56,14 @@ ws_lock = threading.Lock()
 # ========================
 # CSV helpers
 # ========================
+
+
 def ensure_csv():
     if not os.path.exists(CSV_PATH):
         with open(CSV_PATH, "w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
             writer.writeheader()
+
 
 def append_csv(data: dict):
     with open(CSV_PATH, "a", encoding="utf-8", newline="") as f:
@@ -76,6 +79,8 @@ def append_csv(data: dict):
 # ========================
 # WebSocket logic
 # ========================
+
+
 async def ws_handler(websocket):
     with ws_lock:
         ws_clients.add(websocket)
@@ -85,6 +90,7 @@ async def ws_handler(websocket):
     finally:
         with ws_lock:
             ws_clients.discard(websocket)
+
 
 async def broadcast_ws(data: dict):
     message = json.dumps(data, ensure_ascii=False)
@@ -97,6 +103,7 @@ async def broadcast_ws(data: dict):
         except:
             pass
 
+
 def start_ws_server():
     def ws_thread():
         global ws_loop
@@ -105,7 +112,8 @@ def start_ws_server():
 
         async def start_server():
             await websockets.serve(ws_handler, Config.WEBSOCKET_HOST, Config.WEBSOCKET_PORT)
-            print(f"WebSocket 运行于 ws://{Config.WEBSOCKET_HOST}:{Config.WEBSOCKET_PORT}")
+            print(
+                f"WebSocket 运行于 ws://{Config.WEBSOCKET_HOST}:{Config.WEBSOCKET_PORT}")
 
         ws_loop.run_until_complete(start_server())
         ws_loop.run_forever()
@@ -124,6 +132,7 @@ def on_connect(client, userdata, flags, rc):
     else:
         mqtt_status["error"] = f"rc={rc}"
 
+
 def on_disconnect(client, userdata, rc):
     mqtt_status["connected"] = False
     print("MQTT 断开连接")
@@ -138,6 +147,7 @@ def on_disconnect(client, userdata, rc):
                 except:
                     time.sleep(3)
         threading.Thread(target=reconnect, daemon=True).start()
+
 
 def on_message(client, userdata, msg):
     try:
@@ -156,6 +166,8 @@ def on_message(client, userdata, msg):
 # ========================
 # MQTT control
 # ========================
+
+
 def connect_mqtt():
     global mqtt_client, user_requested_disconnect
 
@@ -176,6 +188,7 @@ def connect_mqtt():
 
         mqtt_client = client
 
+
 def disconnect_mqtt():
     global mqtt_client, user_requested_disconnect
 
@@ -186,25 +199,32 @@ def disconnect_mqtt():
             mqtt_client.disconnect()
             mqtt_client = None
 
+
 # ========================
 # Flask API
 # ========================
 app = Flask(__name__)
-CORS(app)
+# 配置CORS以允许跨域请求
+CORS(app, resources={r"/*": {"origins": "*",
+     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
+
 
 @app.route("/api/connect", methods=["POST"])
 def api_connect():
     connect_mqtt()
     return jsonify({"msg": "connected", "status": mqtt_status})
 
+
 @app.route("/api/disconnect", methods=["POST"])
 def api_disconnect():
     disconnect_mqtt()
     return jsonify({"msg": "disconnected"})
 
+
 @app.route("/api/status", methods=["GET"])
 def api_status():
     return jsonify(mqtt_status)
+
 
 @app.route("/api/history", methods=["GET"])
 def api_history():
@@ -216,6 +236,7 @@ def api_history():
                 data.append(row)
     return jsonify(data[-50:])
 
+
 # ========================
 # Main
 # ========================
@@ -223,4 +244,5 @@ if __name__ == "__main__":
     ensure_csv()
     start_ws_server()
     connect_mqtt()
-    app.run(host=Config.SUBSCRIBE_SERVICE_HOST, port=Config.SUBSCRIBE_SERVICE_PORT, debug=False, use_reloader=False)
+    app.run(host=Config.SUBSCRIBE_SERVICE_HOST,
+            port=Config.SUBSCRIBE_SERVICE_PORT, debug=False, use_reloader=False)

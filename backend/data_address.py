@@ -6,6 +6,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from config import Config
 
+
 class DataProcessor:
     def __init__(self, csv_path):
         self.csv_path = csv_path
@@ -124,7 +125,8 @@ class DataProcessor:
             )
 
             # 转成更短、更适合图表的格式
-            plot_df["timestamp_fmt"] = plot_df["timestamp"].dt.strftime("%m-%d %H:%M")
+            plot_df["timestamp_fmt"] = plot_df["timestamp"].dt.strftime(
+                "%m-%d %H:%M")
         else:
             plot_df["timestamp_fmt"] = list(range(len(plot_df)))
 
@@ -138,9 +140,12 @@ class DataProcessor:
             "correlation": correlation,
             "available_metrics": available_metrics
         }
-        
+
+
 app = Flask(__name__)
-CORS(app)
+# 配置CORS以允许跨域请求
+CORS(app, resources={r"/*": {"origins": "*",
+     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
 
 BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.normpath(os.path.join(BASE_DIR, "..", "data"))
@@ -149,10 +154,13 @@ CSV_PATH = os.path.join(DATA_DIR, "sensor_data.csv")
 
 processor = DataProcessor(CSV_PATH)
 
+
 @app.route("/api/analyze", methods=["GET"])
 def analyze_data():
     result = processor.process()
     return jsonify(result)
 
+
 if __name__ == "__main__":
-    app.run(host=Config.ANALYSIS_SERVICE_HOST, port=Config.ANALYSIS_SERVICE_PORT, debug=True)
+    app.run(host=Config.ANALYSIS_SERVICE_HOST,
+            port=Config.ANALYSIS_SERVICE_PORT, debug=True)

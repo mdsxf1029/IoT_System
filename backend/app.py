@@ -3,7 +3,9 @@ from flask_cors import CORS
 from config import Config
 
 app = Flask(__name__)
-CORS(app)
+# 配置CORS以允许跨域请求
+CORS(app, resources={r"/*": {"origins": "*",
+     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]}})
 
 
 @app.route('/ping')
@@ -12,4 +14,5 @@ def ping():
 
 
 if __name__ == '__main__':
-    app.run(host=Config.ANALYSIS_SERVICE_HOST, port=3000, debug=True)
+    app.run(host=Config.ANALYSIS_SERVICE_HOST,
+            port=Config.ANALYSIS_SERVICE_PORT, debug=True)
