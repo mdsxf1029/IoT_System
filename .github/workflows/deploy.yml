@@ -60,7 +60,7 @@ jobs:
             # 3. 彻底清理旧进程 (包括后端 Python 和前端 Server)
             echo "=== 停止旧服务 ==="
             # 清理后端
-            for name in "main_service.py" "publish.py" "data_address.py" "app.py" "subscribe.py" "combined_service.py"; do
+            for name in "main_service.py" "publish.py" "data_address.py" "app.py" "subscribe.py"; do
                 pids=$(ps -ef | grep "$name" | grep -v grep | awk '{print $2}')
                 [ -n "$pids" ] && kill -9 $pids || true
             done
@@ -70,8 +70,7 @@ jobs:
             # 4. 启动后端服务
             echo "=== 启动后端服务 ==="
             cd $PROJECT_DIR/backend
-            nohup python3 -u main_service.py > main_service.log 2>&1 &
-            nohup python3 -u publish.py > publish.log 2>&1 &
+            nohup python3 -u subscribe.py > subscribe.log 2>&1 &
             nohup python3 -u app.py > app.log 2>&1 &
             
             # 5. 启动前端服务 (支持 SPA 路由的 5173 端口)
