@@ -13,7 +13,7 @@ paho-mqtt==2.1.0
 pandas==2.1.0
 numpy==1.26.0
 
-# 机器学习（线性回归）
+# 机器学习（线性回归） 
 scikit-learn==1.3.0
 
 # WebSocket
