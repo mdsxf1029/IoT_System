@@ -45,90 +45,59 @@ jobs:
         timeout: 300s
         command_timeout: 30m
         script: |
-          set -e
-          
-          echo "=== 开始部署 ==="
-          echo "当前用户: $(whoami)"
-          echo "HOME目录: $HOME"
-          
-          # 检查上传的文件
-          echo "=== 检查上传的文件 ==="
-          ls -la /tmp/deploy.tar.gz || (echo "ERROR: 压缩包不存在" && exit 1)
-          
-          # 检查压缩包内容
-          echo "=== 压缩包内容 ==="
-          tar -tzf /tmp/deploy.tar.gz | head -10
-          
-          # 创建项目目录（清理旧目录）
-          echo "=== 准备项目目录 ==="
-          rm -rf $HOME/IoT_System
-          mkdir -p $HOME/IoT_System
-          
-          # 解压文件
-          echo "=== 解压文件 ==="
-          tar -xzf /tmp/deploy.tar.gz -C $HOME/IoT_System/
-          rm -f /tmp/deploy.tar.gz
-          
-          # 检查解压结果
-          echo "=== 解压后的目录结构 ==="
-          ls -la $HOME/IoT_System/
-          
-          PROJECT_DIR="$HOME/IoT_System"
-          cd $PROJECT_DIR
-          
-          # 检查 backend 目录
-          if [ ! -d "backend" ]; then
-            echo "ERROR: backend 目录不存在"
-            echo "当前目录内容:"
-            ls -la
-            exit 1
-          fi
-          echo "✓ backend 目录存在"
-          ls -la backend/
-          
-          # 安装 Python 依赖
-          echo "=== 安装 Python 依赖 ==="
-          cd backend
-          if [ -f "requirements.txt" ]; then
-            pip3 install -r requirements.txt
-          else
-            pip3 install flask flask-cors paho-mqtt pandas numpy scikit-learn websockets
-          fi
-          
-          # 安装前端依赖（如果 npm 存在）
-          cd $PROJECT_DIR
-          if [ -d "frontend" ]; then
-            if command -v npm &> /dev/null; then
-              echo "=== 安装前端依赖 ==="
-              cd frontend
-              npm install || echo "前端依赖安装失败，继续部署..."
+            set -e
+
+            echo "=== 开始部署 ==="
+            PROJECT_DIR="$HOME/IoT_System"
+
+            # 1. 准备目录
+            echo "=== 准备项目目录 ==="
+            rm -rf $PROJECT_DIR
+            mkdir -p $PROJECT_DIR
+
+            # 2. 解压
+            echo "=== 解压文件 ==="
+            if [ -f /tmp/deploy.tar.gz ]; then
+                tar -xzf /tmp/deploy.tar.gz -C $PROJECT_DIR/
+                rm -f /tmp/deploy.tar.gz
             else
-              echo "npm 未安装，跳过前端依赖安装"
+                echo "ERROR: 压缩包不存在"
+                exit 1
             fi
-          fi
-          
-          # 停止旧服务（使用更安全的方式）
-          echo "=== 停止旧服务 ==="
-          cd $PROJECT_DIR
-          
-          # 使用 PID 文件或直接查找进程
-          for script in publish.py subscribe.py data_address.py app.py; do
-            pid=$(pgrep -f "python3.*$script" 2>/dev/null || true)
-            if [ -n "$pid" ]; then
-              echo "停止 $script (PID: $pid)"
-              kill $pid 2>/dev/null || true
-            fi
-          done
-          
-          sleep 2
-          
-          # 启动新服务
-          echo "=== 启动服务 ==="
-          cd $PROJECT_DIR
-          nohup python3 backend/subscribe.py > backend/subscribe.log 2>&1 &
-          nohup python3 backend/publish.py > backend/publish.log 2>&1 &
-          nohup python3 backend/data_address.py > backend/analysis.log 2>&1 &
-          nohup python3 backend/app.py > backend/app.log 2>&1 &
-          
-          echo "=== 部署完成 ==="
-          ps aux | grep python | grep -v grep || echo "没有运行中的服务"
+
+            # 3. 安装依赖
+            echo "=== 检查并安装 Python 依赖 ==="
+            cd $PROJECT_DIR/backend
+            # 使用 --no-cache-dir 减少磁盘占用，|| true 防止因权限警告导致中断
+            pip3 install --user -r requirements.txt || pip3 install --user flask flask-cors paho-mqtt pandas numpy scikit-learn websockets || true
+
+            # 4. 停止旧服务 (重点优化：不再因为进程不存在而报错)
+            echo "=== 停止旧服务 ==="
+            # 使用 pkill -f 匹配命令行，并使用 || true 忽略“进程不存在”的错误
+            pkill -f "python3.*subscribe.py" || true
+            pkill -f "python3.*publish.py" || true
+            pkill -f "python3.*data_address.py" || true
+            pkill -f "python3.*app.py" || true
+            sleep 2
+
+            # 5. 启动新服务 (重点优化：使用 disown 确保进程在后台稳固运行)
+            echo "=== 启动服务 ==="
+            # 确保在 backend 目录下启动，或者使用绝对路径
+            cd $PROJECT_DIR/backend
+
+            nohup python3 subscribe.py > subscribe.log 2>&1 &
+            disown
+            nohup python3 publish.py > publish.log 2>&1 &
+            disown
+            nohup python3 data_address.py > analysis.log 2>&1 &
+            disown
+            nohup python3 app.py > app.log 2>&1 &
+            disown
+
+            echo "=== 部署完成，检查运行状态 ==="
+            sleep 3
+            ps aux | grep python3 | grep -E "subscribe|publish|data_address|app" || echo "警告：未发现运行中的服务"
+
+            # 打印最后几行日志看看有没有启动报错
+            echo "=== 最近日志摘要 ==="
+            tail -n 5 *.log || true
