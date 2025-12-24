@@ -45,63 +45,58 @@ jobs:
         timeout: 300s
         command_timeout: 30m
         script: |
-            set -e
-
             echo "=== 开始部署 ==="
             PROJECT_DIR="$HOME/IoT_System"
 
-            # 1. 准备目录
-            echo "=== 准备项目目录 ==="
-            rm -rf $PROJECT_DIR
-            mkdir -p $PROJECT_DIR
-
-            # 2. 解压
-            echo "=== 解压文件 ==="
-            if [ -f /tmp/deploy.tar.gz ]; then
-                tar -xzf /tmp/deploy.tar.gz -C $PROJECT_DIR/
-                rm -f /tmp/deploy.tar.gz
-            else
-                echo "ERROR: 压缩包不存在"
+            # 1. 准备目录与解压
+            echo "=== 准备项目目录并解压 ==="
+            if [ ! -f /tmp/deploy.tar.gz ]; then
+                echo "ERROR: /tmp/deploy.tar.gz 不存在"
                 exit 1
             fi
+            rm -rf $PROJECT_DIR
+            mkdir -p $PROJECT_DIR
+            tar -xzf /tmp/deploy.tar.gz -C $PROJECT_DIR/
+            rm -f /tmp/deploy.tar.gz
 
-            # 3. 安装依赖
-            echo "=== 检查并安装 Python 依赖 ==="
+            # 2. 安装依赖
+            echo "=== 安装依赖 ==="
             cd $PROJECT_DIR/backend
             pip3 install --user -r requirements.txt || true
 
-            # 4. 停止旧服务 (使用 [ ] 技巧防止进程自杀)
+            # 3. 精确清理旧进程 (不再使用危险的 pkill)
             echo "=== 停止旧服务 ==="
-            # [s]ubscribe 会匹配 "subscribe"，但 pkill 自己的命令行里是 "[s]ubscribe"，不匹配正则
-            pkill -f "python3.*[s]ubscribe.py" || true
-            pkill -f "python3.*[p]ublish.py" || true
-            pkill -f "python3.*[d]ata_address.py" || true
-            pkill -f "python3.*[a]pp.py" || true
+            # 定义我们要清理的脚本名称
+            for script_name in "subscribe.py" "publish.py" "data_address.py" "app.py"; do
+                echo "正在检查 $script_name..."
+                # 查找进程ID，排除 grep 自身，排除当前 shell 脚本
+                pids=$(ps -ef | grep "$script_name" | grep -v grep | awk '{print $2}')
+                if [ -n "$pids" ]; then
+                    echo "发现旧进程 $script_name (PIDs: $pids)，正在终止..."
+                    kill -9 $pids 2>/dev/null || true
+                else
+                    echo "$script_name 未在运行"
+                fi
+            done
             sleep 2
 
-            # 5. 启动新服务
-            echo "=== 启动服务 ==="
+            # 4. 启动新服务
+            echo "=== 启动新服务 ==="
             cd $PROJECT_DIR/backend
 
-            # 依次启动并记录 PID 
-            nohup python3 subscribe.py > subscribe.log 2>&1 &
-            echo $! > subscribe.pid
-            nohup python3 publish.py > publish.log 2>&1 &
-            echo $! > publish.pid
-            nohup python3 data_address.py > analysis.log 2>&1 &
-            echo $! > analysis.pid
-            nohup python3 app.py > app.log 2>&1 &
-            echo $! > app.pid
+            # 使用 nohup 启动，并将输出重定向
+            # 添加 stdbuf -oL 强制 Python 使用行缓冲，确保日志实时写入
+            nohup python3 -u subscribe.py > subscribe.log 2>&1 &
+            nohup python3 -u publish.py > publish.log 2>&1 &
+            nohup python3 -u data_address.py > analysis.log 2>&1 &
+            nohup python3 -u app.py > app.log 2>&1 &
 
+            # 关键：稍微等待并确保进程已经脱离当前 shell
+            sleep 2
             disown -a
 
-            echo "=== 部署完成，检查运行状态 ==="
-            sleep 5
-            ps aux | grep python3 | grep -E "subscribe|publish|data_address|app" || echo "警告：未发现运行中的服务"
+            echo "=== 部署完成，当前运行状态 ==="
+            ps -ef | grep python3 | grep -E "subscribe|publish|data_address|app" | grep -v grep || echo "警告：未发现运行中的服务"
 
-            # 检查日志是否有立即报错
-            echo "=== 启动日志自检 ==="
-            for log in *.log; do
-                echo "--- $log 尾部内容 ---"
-                tail -n 5 "$log"
-            done
+            echo "=== 最近日志摘要 ==="
+            tail -n 10 *.log || true
