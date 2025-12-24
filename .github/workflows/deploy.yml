@@ -42,6 +42,8 @@ jobs:
         username: ${{ secrets.USERNAME }}
         key: ${{ secrets.SSH_KEY }}
         port: 22
+        timeout: 300s
+        command_timeout: 30m
         script: |
           set -e
           
@@ -93,12 +95,16 @@ jobs:
             pip3 install flask flask-cors paho-mqtt pandas numpy scikit-learn websockets
           fi
           
-          # 安装前端依赖
+          # 安装前端依赖（如果 npm 存在）
           cd $PROJECT_DIR
           if [ -d "frontend" ]; then
-            echo "=== 安装前端依赖 ==="
-            cd frontend
-            npm install || echo "前端依赖安装失败，继续部署..."
+            if command -v npm &> /dev/null; then
+              echo "=== 安装前端依赖 ==="
+              cd frontend
+              npm install || echo "前端依赖安装失败，继续部署..."
+            else
+              echo "npm 未安装，跳过前端依赖安装"
+            fi
           fi
           
           # 停止旧服务
@@ -107,7 +113,7 @@ jobs:
           pkill -f "python.*subscribe.py" || true
           pkill -f "python.*data_address.py" || true
           pkill -f "python.*app.py" || true
-          sleep 5
+          sleep 3
           
           # 启动新服务
           echo "=== 启动服务 ==="
