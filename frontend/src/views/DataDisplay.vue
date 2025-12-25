@@ -2,6 +2,42 @@
   <div class="card">
     <h2 class="title">环境数据分析</h2>
 
+    <!-- 统计卡片区域 -->
+    <div class="stats-cards" v-if="sensorInfo">
+      <div class="stat-card">
+        <div class="stat-icon">📍</div>
+        <div class="stat-content">
+          <div class="stat-label">传感器位置</div>
+          <div class="stat-value">{{ sensorInfo.location }}</div>
+          <div class="stat-sub">设备ID: {{ sensorInfo.sensor_id }}</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">📊</div>
+        <div class="stat-content">
+          <div class="stat-label">数据统计</div>
+          <div class="stat-value">{{ dataQuality?.total_records || 0 }} 条</div>
+          <div class="stat-sub">分析: {{ dataQuality?.analyzed_records || 0 }} 条</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">⏱️</div>
+        <div class="stat-content">
+          <div class="stat-label">采集时长</div>
+          <div class="stat-value">{{ timeRange?.duration_hours || 0 }} 小时</div>
+          <div class="stat-sub" v-if="timeRange?.start">{{ formatShortTime(timeRange.start) }}</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">✅</div>
+        <div class="stat-content">
+          <div class="stat-label">数据质量</div>
+          <div class="stat-value">{{ (100 - (dataQuality?.missing_rate || 0)).toFixed(1) }}%</div>
+          <div class="stat-sub">完整率</div>
+        </div>
+      </div>
+    </div>
+
     <div class="controls">
       <label>选择指标：</label>
       <select v-model="currentMetric" @change="renderChart">
@@ -22,6 +58,14 @@
       <!-- 右侧：分析解读 -->
       <div class="analysis-panel">
         <h3>分析解读</h3>
+
+        <p class="analysis-item" v-if="predictTrend">
+          🔮 <strong>预测趋势：</strong><br />
+          根据线性回归模型，预测未来 5 个时间点
+          <strong>{{ currentMetric }}</strong> 将呈现
+          <strong style="color: #ee6666">{{ predictTrend }}</strong>趋势，
+          预测值范围 {{ predictRange }}。
+        </p>
 
         <p class="analysis-item" v-if="strongestCorrelation">
           📈 <strong>趋势特征：</strong><br />
@@ -44,6 +88,13 @@
           颜色越深表示相关性越强。
         </p>
 
+        <p class="analysis-item" v-if="dataQuality">
+          ✅ <strong>数据质量：</strong><br />
+          本次分析共使用 <strong>{{ dataQuality.total_records }}</strong> 条数据，
+          数据完整率 <strong>{{ (100 - dataQuality.missing_rate).toFixed(1) }}%</strong>，
+          分析结果具有较高可信度。
+        </p>
+
         <p class="analysis-item">
           🧠 <strong>分析说明：</strong><br />
           该分析结果可用于理解环境参数之间的相互影响关系，
@@ -63,6 +114,9 @@ const chartRef = ref(null)
 const correlationChartRef = ref(null)  
 const availableMetrics = ref([])
 const currentMetric = ref("temperature")
+const sensorInfo = ref(null)
+const timeRange = ref(null)
+const dataQuality = ref(null)
 
 let chartInstance = null
 let correlationChartInstance = null 
@@ -74,13 +128,23 @@ const renderChart = () => {
   if (!analysisData) return
   const metricData = analysisData[currentMetric.value]
 
+  // 构建预测数据：在现有数据后追加预测点
+  const predictLabels = metricData.predict?.map((_, i) => `预测+${i + 1}`) || []
+  const allLabels = [...labels, ...predictLabels]
+  
+  // 为预测数据补齐前面的空值
+  const predictData = [
+    ...Array(labels.length).fill(null),
+    ...metricData.predict
+  ]
+
   const option = {
     backgroundColor: "#f5f8ff",
-    color: ["#5470c6", "#91cc75", "#fac858"],
+    color: ["#5470c6", "#91cc75", "#fac858", "#ee6666"],
     title: {
-        text: `${currentMetric.value} 趋势分析`,
+        text: `${currentMetric.value} 趋势分析与预测`,
         left: "center",
-        top: 20, // 增加顶部距离
+        top: 20,
         textStyle: {
         color: "#334466",
         fontSize: 20,
@@ -89,22 +153,22 @@ const renderChart = () => {
     },
     tooltip: { trigger: "axis" },
     legend: {
-        top: 60, // 增加与标题距离
-        data: ["原始数据", "平滑数据", "拟合曲线"],
+        top: 60,
+        data: ["原始数据", "平滑数据", "拟合曲线", "预测趋势"],
         textStyle: { color: "#334466" }
     },
     grid: {
         left: "6%",
         right: "6%",
         bottom: "10%",
-        top: 120, // 整体上移，避免覆盖标题/图例
+        top: 120,
         containLabel: true
     },
     xAxis: {
         type: "category",
-        data: labels,
+        data: allLabels,
         axisLine: { lineStyle: { color: "#cbd6e2" } },
-        axisLabel: { color: "#334466", rotate: 45 } // x轴标签可以旋转避免重叠
+        axisLabel: { color: "#334466", rotate: 45 }
     },
     yAxis: {
         type: "value",
@@ -115,7 +179,16 @@ const renderChart = () => {
     series: [
         { name: "原始数据", type: "line", data: metricData.raw, smooth: false },
         { name: "平滑数据", type: "line", data: metricData.smooth, smooth: true },
-        { name: "拟合曲线", type: "line", data: metricData.fitted, smooth: true, lineStyle: { type: "dashed" } }
+        { name: "拟合曲线", type: "line", data: metricData.fitted, smooth: true, lineStyle: { type: "dashed" } },
+        { 
+          name: "预测趋势", 
+          type: "line", 
+          data: predictData, 
+          smooth: true,
+          lineStyle: { type: "dotted", width: 2 },
+          itemStyle: { color: "#ee6666" },
+          connectNulls: true
+        }
     ]
     }
 
@@ -207,6 +280,37 @@ const strongestCorrelation = computed(() => {
   return maxItem
 })
 
+const formatShortTime = (timeStr) => {
+  if (!timeStr) return ''
+  const date = new Date(timeStr)
+  return `${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+// 计算预测趋势和范围
+const predictTrend = computed(() => {
+  if (!analysisData || !currentMetric.value) return null
+  const metricData = analysisData[currentMetric.value]
+  if (!metricData?.predict || metricData.predict.length < 2) return null
+
+  const firstVal = metricData.predict[0]
+  const lastVal = metricData.predict[metricData.predict.length - 1]
+  const diff = lastVal - firstVal
+
+  if (Math.abs(diff) < 0.1) return '稳定'
+  return diff > 0 ? '上升' : '下降'
+})
+
+const predictRange = computed(() => {
+  if (!analysisData || !currentMetric.value) return ''
+  const metricData = analysisData[currentMetric.value]
+  if (!metricData?.predict || metricData.predict.length === 0) return ''
+
+  const values = metricData.predict
+  const min = Math.min(...values).toFixed(2)
+  const max = Math.max(...values).toFixed(2)
+  return `${min} ~ ${max}`
+})
+
 onMounted(async () => {
   const res = await axios.get("http://121.43.119.155:5000/api/analyze")
 
@@ -214,6 +318,9 @@ onMounted(async () => {
   labels = res.data.labels
   availableMetrics.value = res.data.available_metrics
   correlationData.value = res.data.correlation
+  sensorInfo.value = res.data.sensor_info
+  timeRange.value = res.data.time_range
+  dataQuality.value = res.data.data_quality
   currentMetric.value = availableMetrics.value[0]
 
   // 初始化图表
@@ -331,5 +438,68 @@ select {
   line-height: 1.7;
   color: #555;
   margin-bottom: 18px;
+}
+
+/* 统计卡片样式 */
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 16px;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  transition: transform 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.3);
+}
+
+.stat-card:nth-child(2) {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.stat-card:nth-child(3) {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.stat-card:nth-child(4) {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.stat-icon {
+  font-size: 32px;
+  opacity: 0.9;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-label {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.stat-sub {
+  font-size: 11px;
+  opacity: 0.8;
 }
 </style>

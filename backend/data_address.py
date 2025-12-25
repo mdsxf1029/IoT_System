@@ -14,6 +14,13 @@ class DataProcessor:
         self.csv_path = csv_path
         # 系统支持的指标维度
         self.metrics = ["temperature", "humidity", "pressure"]
+        # 传感器元信息（实际项目可从数据库读取）
+        self.sensor_info = {
+            "sensor_id": "ENV_SENSOR_001",
+            "location": "同济大学嘉定校区-智慧楼宇A座3层",
+            "device_type": "环境监测传感器",
+            "install_date": "2024-09-01"
+        }
 
     def predict_series(self, df, column, points=5):
         """
@@ -118,8 +125,9 @@ class DataProcessor:
             )
 
         # ----------------------------------------------------
-        # 时间格式处理
+        # 时间格式处理与时间范围统计
         # ----------------------------------------------------
+        time_range = {}
         if "timestamp" in plot_df.columns:
             plot_df["timestamp"] = pd.to_datetime(
                 plot_df["timestamp"],
@@ -129,6 +137,15 @@ class DataProcessor:
             # 转成更短、更适合图表的格式
             plot_df["timestamp_fmt"] = plot_df["timestamp"].dt.strftime(
                 "%m-%d %H:%M")
+            
+            # 计算时间范围（使用全量数据）
+            if "timestamp" in df.columns and not df["timestamp"].isna().all():
+                df_time = pd.to_datetime(df["timestamp"], errors="coerce")
+                time_range = {
+                    "start": df_time.min().strftime("%Y-%m-%d %H:%M:%S"),
+                    "end": df_time.max().strftime("%Y-%m-%d %H:%M:%S"),
+                    "duration_hours": round((df_time.max() - df_time.min()).total_seconds() / 3600, 2)
+                }
         else:
             plot_df["timestamp_fmt"] = list(range(len(plot_df)))
 
@@ -140,7 +157,14 @@ class DataProcessor:
             "data": analysis_result,
             "labels": plot_df["timestamp_fmt"].tolist(),
             "correlation": correlation,
-            "available_metrics": available_metrics
+            "available_metrics": available_metrics,
+            "sensor_info": self.sensor_info,
+            "time_range": time_range,
+            "data_quality": {
+                "total_records": len(df),
+                "analyzed_records": len(plot_df),
+                "missing_rate": round((1 - len(df.dropna()) / len(df)) * 100, 2) if len(df) > 0 else 0
+            }
         }
 
 
