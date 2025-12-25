@@ -17,7 +17,7 @@ class DataProcessor:
         # 传感器元信息（实际项目可从数据库读取）
         self.sensor_info = {
             "sensor_id": "ENV_SENSOR_001",
-            "location": "同济大学嘉定校区-智慧楼宇A座3层",
+            "location": "同济大学嘉定校区-济事楼416",
             "device_type": "环境监测传感器",
             "install_date": "2024-09-01"
         }
@@ -137,7 +137,7 @@ class DataProcessor:
             # 转成更短、更适合图表的格式
             plot_df["timestamp_fmt"] = plot_df["timestamp"].dt.strftime(
                 "%m-%d %H:%M")
-            
+
             # 计算时间范围（使用全量数据）
             if "timestamp" in df.columns and not df["timestamp"].isna().all():
                 df_time = pd.to_datetime(df["timestamp"], errors="coerce")
