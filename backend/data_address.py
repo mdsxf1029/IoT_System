@@ -24,7 +24,7 @@ class DataProcessor:
 
     def predict_series(self, df, column, points=5):
         """
-        对单个时间序列做线性回归拟合与简单预测
+        对单个时间序列做线性回归拟合与简单预测 
         """
         if column not in df.columns:
             return [], []
